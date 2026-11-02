@@ -21,8 +21,8 @@ If you set `VITE_API_URL` to a full backend URL, the backend must allow the fron
 
 The landing page explains the flow just below the intro: create an event and set its total, share the joining link with the group, then track what people have paid.
 
-## Backend API expectations
+## Participants and balances
 
-The UI uses `GET /bills`, `POST /bills`, `GET /participants/:token`, and `POST /participants/:token/join`. Share URLs use the public token returned in the bill list. Since `POST /bills` currently returns only a success message, the frontend reloads the list and identifies the new bill by its ID; if it cannot identify it, it reports that a share link could not be made rather than inventing a token.
+The UI uses `GET /bills`, `POST /bills`, `GET /participants/:token`, `POST /participants/:token/join`, and `GET /participants/:token/balance`. After creating an event, the creator is added as its first participant, then balances are calculated. Balances are recalculated after every successful participant join. The participant list shows each person's paid amount and calculated balance.
 
-The participant lookup currently returns participants but not event details, so shared links include the event title, currency, and total as display-only query parameters. The backend remains unchanged.
+The current participant API requires `amount_paid` to be greater than zero, so the creator and guests must enter a positive contribution to join. Share URLs include the event title, currency, and total as display-only query parameters because participant lookup returns participants but not event details. The backend remains unchanged.

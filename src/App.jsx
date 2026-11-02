@@ -97,14 +97,17 @@ function CreateDialog({ onClose, onCreated }) {
   const [title, setTitle] = useState('')
   const [amount, setAmount] = useState('')
   const [currency, setCurrency] = useState('KES')
+  const [ownerName, setOwnerName] = useState('')
+  const [ownerPaid, setOwnerPaid] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
   async function submit(event) {
     event.preventDefault()
     const billTotal = Number(amount)
-    if (!title.trim() || !Number.isFinite(billTotal) || billTotal <= 0) {
-      setError('Add a name and a total greater than zero to get started.')
+    const ownerAmountPaid = Number(ownerPaid)
+    if (!title.trim() || !Number.isFinite(billTotal) || billTotal <= 0 || !ownerName.trim() || !Number.isFinite(ownerAmountPaid) || ownerAmountPaid <= 0) {
+      setError('Add an event name, a total, your name, and an amount you’ve paid greater than zero.')
       return
     }
 
@@ -128,11 +131,27 @@ function CreateDialog({ onClose, onCreated }) {
         return
       }
       const created = (after.data || []).find((bill) => !existingIds.has(bill.id))
-      if (!created) {
-        onCreated(null, 'Your event was created, but its share link is not ready yet. Please refresh and try again.')
+      if (!created?.public_token) {
+        onCreated(created || null, 'Your event was created, but we couldn’t prepare its joining link. Please refresh and try again.')
         return
       }
-      onCreated(created)
+
+      try {
+        await request(`/participants/${encodeURIComponent(created.public_token)}/join`, {
+          method: 'POST',
+          body: JSON.stringify({ name: ownerName.trim(), amount_paid: ownerAmountPaid }),
+        })
+      } catch {
+        onCreated(created, 'Your event was created, but we couldn’t add you as its first participant. You can still join using the event link.')
+        return
+      }
+
+      try {
+        await request(`/participants/${encodeURIComponent(created.public_token)}/balance`)
+        onCreated(created, 'Event created — you’re in as the first participant.')
+      } catch {
+        onCreated(created, 'Event created and you’re in. We couldn’t refresh balances right now.')
+      }
     } catch {
       setError('We couldn’t create your event. Please try again in a moment.')
     } finally {
@@ -150,7 +169,7 @@ function CreateDialog({ onClose, onCreated }) {
         </button>
         <div className="eyebrow"><span className="eyebrow-dot" /> START A SHARED EVENT</div>
         <h2 id="create-title">What are we<br />splitting?</h2>
-        <p className="dialog-intro">Name the plan and pop in the total. Your people can add what they’ve paid once they join.</p>
+        <p className="dialog-intro">Set the event total and add yourself as the first participant.</p>
         <form onSubmit={submit} className="create-form">
           <label>
             <span>Give it a name</span>
@@ -168,6 +187,18 @@ function CreateDialog({ onClose, onCreated }) {
               <input inputMode="decimal" type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" />
             </div>
           </label>
+          <label>
+            <span>Your name</span>
+            <input value={ownerName} onChange={(event) => setOwnerName(event.target.value)} placeholder="What should we call you?" maxLength={80} />
+          </label>
+          <label>
+            <span>How much have you paid so far?</span>
+            <div className="amount-input">
+              <span className="currency-static">{currency}</span>
+              <input inputMode="decimal" type="number" min="0.01" step="0.01" value={ownerPaid} onChange={(event) => setOwnerPaid(event.target.value)} placeholder="0.00" />
+            </div>
+          </label>
+          <p className="field-hint">Add a contribution above zero to join. You can update it as the event progresses.</p>
           {error && <p className="form-error" role="alert">{error}</p>}
           <button className="button button-yellow form-submit" type="submit" disabled={busy}>
             {busy ? 'Making your split…' : <>Make a split <Icon name="arrow" size={18} /></>}
@@ -291,7 +322,7 @@ function Dashboard() {
     setDialogOpen(false)
     if (bill) {
       setBills((current) => [bill, ...current])
-      setNotice('Your split is ready. Copy its link to get the crew together.')
+      setNotice(message || 'Your event is ready. Copy its link to invite your crew.')
     } else {
       setNotice(message)
       refreshBills()
@@ -452,7 +483,13 @@ function JoinPage() {
       })
       setName('')
       setPaid('')
-      setMessage('You’re in! Your event is one person stronger.')
+      let successMessage = 'You’re in! Your event is one person stronger.'
+      try {
+        await request(`/participants/${encodeURIComponent(token)}/balance`)
+      } catch {
+        successMessage = 'You joined, but we couldn’t refresh balances right now.'
+      }
+      setMessage(successMessage)
       await refreshParticipants()
     } catch {
       setMessage('We couldn’t add you to this event. Please try again in a moment.')
@@ -491,7 +528,26 @@ function JoinPage() {
             {loading ? <p className="participants-empty">Checking who’s in…</p> : loadError ? (
               <p className="participants-empty">{loadError} <button className="inline-button" onClick={() => { setLoading(true); refreshParticipants() }}>Try again</button></p>
             ) : participants.length ? (
-              <ul>{participants.map((participant) => <li key={participant.id}><span className="person-avatar">{participant.name.slice(0, 1).toUpperCase()}</span><span>{participant.name}</span><strong>{currencyAmount(participant.amount_paid, currency)}</strong></li>)}</ul>
+              <ul>{participants.map((participant) => {
+                const balance = Number(participant.balance)
+                const hasBalance = participant.balance !== null && participant.balance !== undefined && Number.isFinite(balance)
+                const balanceLabel = balance > 0
+                  ? `Owes ${currencyAmount(balance, currency)}`
+                  : balance < 0
+                    ? `Over by ${currencyAmount(Math.abs(balance), currency)}`
+                    : 'Settled'
+
+                return (
+                  <li key={participant.id}>
+                    <span className="person-avatar">{participant.name.slice(0, 1).toUpperCase()}</span>
+                    <span className="participant-details">
+                      <span>{participant.name}</span>
+                      <small>Paid {currencyAmount(participant.amount_paid, currency)}</small>
+                    </span>
+                    {hasBalance && <strong className="participant-balance">{balanceLabel}</strong>}
+                  </li>
+                )
+              })}</ul>
             ) : <p className="participants-empty">You could be the first to join this plan.</p>}
           </div>
         </section>
