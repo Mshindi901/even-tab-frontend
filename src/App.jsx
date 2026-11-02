@@ -406,6 +406,7 @@ function JoinPage() {
 
   const refreshParticipants = useCallback(async () => {
     try {
+      //doing this to see if I can get my new code in the repo
       const result = await request(`/participants/${encodeURIComponent(token)}`)
       setLoadError('')
       setParticipants(result.data || [])
