@@ -9,13 +9,13 @@ npm install
 npm run dev
 ```
 
-During development, `/api` requests are proxied to `http://localhost:3000` to avoid cross-origin browser requests. Set `VITE_API_PROXY_TARGET` in a frontend `.env` file to point the proxy at another backend origin:
+The production API base URL defaults to `https://even-tab-backend.onrender.com/api`. During development, `/api` requests are proxied to `https://even-tab-backend.onrender.com` to avoid cross-origin browser requests. Set `VITE_API_PROXY_TARGET` in a frontend `.env` file to point the proxy at another backend origin:
 
 ```env
 VITE_API_PROXY_TARGET=http://localhost:4000
 ```
 
-For deployments, serve or proxy `/api` from the same origin as the frontend, or set `VITE_API_URL` to the backend's full `/api` URL (the backend must allow that origin).
+To override the API base URL, set `VITE_API_URL` to the full backend URL including `/api`. Production deployments that call the backend directly require the backend to allow the frontend's origin.
 
 ## Backend API expectations
 

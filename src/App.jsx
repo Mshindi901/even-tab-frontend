@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, Route, Routes, useParams, useSearchParams } from 'react-router-dom'
 
-const API_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '')
+const API_URL = (
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.DEV ? '/api' : 'https://even-tab-backend.onrender.com/api')
+).replace(/\/$/, '')
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
