@@ -69,6 +69,16 @@ function currencyAmount(amount, currency = 'KES') {
   }).format(value)
 }
 
+function balanceDisplay(balance, currency) {
+  const value = Number(balance)
+  if (balance === null || balance === undefined || !Number.isFinite(value)) {
+    return { label: 'Not calculated', tone: 'pending' }
+  }
+  if (value > 0) return { label: `+${currencyAmount(value, currency)}`, tone: 'positive' }
+  if (value < 0) return { label: `−${currencyAmount(Math.abs(value), currency)}`, tone: 'negative' }
+  return { label: currencyAmount(0, currency), tone: 'zero' }
+}
+
 function shareUrl(bill) {
   const url = new URL(`/join/${bill.public_token}`, window.location.origin)
   url.searchParams.set('title', bill.title)
@@ -244,6 +254,7 @@ function BillCard({ bill, onCopy, onStatusChange, statusBusy }) {
   const [participantsVisible, setParticipantsVisible] = useState(false)
   const [participantsLoading, setParticipantsLoading] = useState(false)
   const [participantsError, setParticipantsError] = useState('')
+  const [balanceNotice, setBalanceNotice] = useState('')
 
   async function loadParticipants() {
     if (!bill.public_token) {
@@ -253,9 +264,18 @@ function BillCard({ bill, onCopy, onStatusChange, statusBusy }) {
 
     setParticipantsLoading(true)
     setParticipantsError('')
+    setBalanceNotice('')
     try {
-      const result = await request(`/participants/${encodeURIComponent(bill.public_token)}`)
-      setParticipants(result.data || [])
+      const path = `/participants/${encodeURIComponent(bill.public_token)}`
+      const initialResult = await request(path)
+      setParticipants(initialResult.data || [])
+      try {
+        await request(`${path}/balance`)
+        const updatedResult = await request(path)
+        setParticipants(updatedResult.data || [])
+      } catch {
+        setBalanceNotice('Balances could not be refreshed. Showing the last saved amounts.')
+      }
     } catch (error) {
       if (error.status === 404) {
         setParticipants([])
@@ -292,8 +312,10 @@ function BillCard({ bill, onCopy, onStatusChange, statusBusy }) {
         </button>
       </div>
       <h3>{bill.title}</h3>
-      <p className="bill-total-label">THE WHOLE THING</p>
-      <div className="bill-total">{currencyAmount(bill.bill_total, bill.currency)}</div>
+      <div className="bill-total-panel">
+        <p className="bill-total-label">EVENT TOTAL</p>
+        <div className="bill-total">{currencyAmount(bill.bill_total, bill.currency)}</div>
+      </div>
       <div className="bill-card-bottom">
         <button className="text-button" onClick={toggleParticipants} aria-expanded={participantsVisible}>
           <Icon name="people" size={16} />
@@ -309,21 +331,30 @@ function BillCard({ bill, onCopy, onStatusChange, statusBusy }) {
           {participantsLoading ? (
             <p className="bill-participants-message">Loading participants…</p>
           ) : participantsError ? (
-            <div className="bill-participants-message">
-              <span>{participantsError}</span>
-              <button className="inline-button" onClick={loadParticipants}>Try again</button>
-            </div>
-          ) : participants.length ? (
-            <ul className="bill-participants-list">
-              {participants.map((participant) => (
-                <li key={participant.id}>
-                  <span className="person-avatar">{participant.name.slice(0, 1).toUpperCase()}</span>
-                  <span className="bill-participant-name">{participant.name}</span>
-                  <strong>{currencyAmount(participant.amount_paid, bill.currency)}</strong>
-                </li>
-              ))}
-            </ul>
-          ) : (
+            <p className="bill-participants-message">{participantsError} <button className="inline-button" onClick={loadParticipants}>Try again</button></p>
+          ) : null}
+          {!participantsLoading && balanceNotice && <p className="bill-balance-notice">{balanceNotice}</p>}
+          {!participantsLoading && participants.length > 0 && (
+            <>
+              <div className="participant-columns"><span>PARTICIPANT</span><span>PAID</span><span>BALANCE</span></div>
+              <ul className="bill-participants-list">
+                {participants.map((participant) => {
+                  const balance = balanceDisplay(participant.balance, bill.currency)
+                  return (
+                    <li className="bill-participant-row" key={participant.id}>
+                      <span className="bill-participant-person">
+                        <span className="person-avatar">{participant.name.slice(0, 1).toUpperCase()}</span>
+                        <span className="bill-participant-name">{participant.name}</span>
+                      </span>
+                      <strong className="participant-paid">{currencyAmount(participant.amount_paid, bill.currency)}</strong>
+                      <strong className={`participant-balance participant-balance-${balance.tone}`}>{balance.label}</strong>
+                    </li>
+                  )
+                })}
+              </ul>
+            </>
+          )}
+          {!participantsLoading && !participantsError && participants.length === 0 && (
             <p className="bill-participants-message">No participants have joined yet.</p>
           )}
         </div>
@@ -526,6 +557,11 @@ function JoinPage() {
 
   const refreshParticipants = useCallback(async () => {
     try {
+      try {
+        await request(`/participants/${encodeURIComponent(token)}/balance`)
+      } catch {
+        setMessage('Balances may be out of date. Please try refreshing later.')
+      }
       const result = await request(`/participants/${encodeURIComponent(token)}`)
       setLoadError('')
       setParticipants(result.data || [])
@@ -543,17 +579,29 @@ function JoinPage() {
 
   useEffect(() => {
     let active = true
-    request(`/participants/${encodeURIComponent(token)}`).then((result) => {
-      if (!active) return
-      setLoadError('')
-      setParticipants(result.data || [])
-    }).catch((error) => {
-      if (!active) return
-      if (error.status === 404) setParticipants([])
-      else setLoadError('We couldn’t load the guest list just now.')
-    }).finally(() => {
-      if (active) setLoading(false)
-    })
+    const path = `/participants/${encodeURIComponent(token)}`
+    async function load() {
+      try {
+        await request(`${path}/balance`)
+      } catch {
+        if (active) setMessage('Balances may be out of date. Please try refreshing later.')
+      }
+
+      try {
+        const result = await request(path)
+        if (!active) return
+        setLoadError('')
+        setParticipants(result.data || [])
+      } catch (error) {
+        if (!active) return
+        if (error.status === 404) setParticipants([])
+        else setLoadError('We couldn’t load the guest list just now.')
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+
+    load()
     return () => { active = false }
   }, [token])
 
@@ -619,13 +667,7 @@ function JoinPage() {
               <p className="participants-empty">{loadError} <button className="inline-button" onClick={() => { setLoading(true); refreshParticipants() }}>Try again</button></p>
             ) : participants.length ? (
               <ul>{participants.map((participant) => {
-                const balance = Number(participant.balance)
-                const hasBalance = participant.balance !== null && participant.balance !== undefined && Number.isFinite(balance)
-                const balanceLabel = balance > 0
-                  ? `Owes ${currencyAmount(balance, currency)}`
-                  : balance < 0
-                    ? `Over by ${currencyAmount(Math.abs(balance), currency)}`
-                    : 'Settled'
+                const balance = balanceDisplay(participant.balance, currency)
 
                 return (
                   <li key={participant.id}>
@@ -634,7 +676,7 @@ function JoinPage() {
                       <span>{participant.name}</span>
                       <small>Paid {currencyAmount(participant.amount_paid, currency)}</small>
                     </span>
-                    {hasBalance && <strong className="participant-balance">{balanceLabel}</strong>}
+                    <strong className={`participant-balance participant-balance-${balance.tone}`}>Balance {balance.label}</strong>
                   </li>
                 )
               })}</ul>
