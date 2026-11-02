@@ -107,10 +107,11 @@ a { color: inherit; text-decoration: none; }
 .list-heading h3 { margin: 0; font: 600 20px var(--display); letter-spacing: -.45px; }
 .list-heading > span { color: #8b897f; font-size: 11px; }
 .bills-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; }
-.bill-card { position: relative; min-height: 222px; overflow: hidden; padding: 19px 18px 17px; border: 1px solid var(--line); border-radius: 9px; background: white; box-shadow: 0 3px 12px #1c1b1207; transition: transform .2s ease, box-shadow .2s ease; }
-.bill-card::before { position: absolute; top: 0; right: 0; left: 0; height: 3px; background: linear-gradient(90deg, var(--yellow), #f5edc7); content: ''; }
-.bill-card:hover { transform: translateY(-3px); box-shadow: 0 12px 28px #1c1b1212; }
+.bill-card { position: relative; min-height: 222px; overflow: hidden; padding: 19px 18px 17px; border: 1px solid #e8d36e; border-radius: 10px; background: #fff7cf; box-shadow: 0 4px 14px #9a7d0012; transition: transform .2s ease, box-shadow .2s ease; }
+.bill-card::before { position: absolute; top: 0; right: 0; left: 0; height: 5px; background: var(--yellow); content: ''; }
+.bill-card:hover { transform: translateY(-3px); box-shadow: 0 12px 28px #9a7d0026; }
 .bill-card-top { display: flex; justify-content: space-between; align-items: center; }
+.bill-card-actions { display: flex; align-items: center; gap: 12px; }
 .status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 20px; color: #466243; background: #edf5e9; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
 .status-pill > span { width: 5px; height: 5px; border-radius: 50%; background: #6ea15f; }
 .status-closed { color: #777; background: #f0efeb; }
@@ -120,15 +121,19 @@ a { color: inherit; text-decoration: none; }
 .status-action:hover { color: var(--ink); }
 .status-action-close { color: #9a574c; }
 .status-action-close:hover { color: #7d281c; }
+.delete-action { display: inline-flex; align-items: center; gap: 4px; border: 0; padding: 5px 0; background: transparent; color: #6f302b; font-size: 9px; font-weight: 700; }
+.delete-action:hover { color: #a12018; }
+.delete-action:disabled { cursor: wait; opacity: .65; }
 .bill-card h3 { overflow: hidden; margin: 16px 0 13px; font: 600 18px var(--display); letter-spacing: -.5px; text-overflow: ellipsis; white-space: nowrap; }
-.bill-total-panel { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border: 1px solid #f0eddf; border-radius: 6px; background: #faf9f3; }
-.bill-total-label { margin: 0; color: #8c8a80; font-size: 8px; font-weight: 700; letter-spacing: 1px; }
+.bill-total-panel { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border: 1px solid #292820; border-radius: 6px; background: #1b1b18; color: white; }
+.bill-total-label { margin: 0; color: #d7d4c2; font-size: 8px; font-weight: 700; letter-spacing: 1px; }
 .bill-total { font: 600 20px var(--display); letter-spacing: -.7px; }
-.bill-card-bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 19px; padding-top: 12px; border-top: 1px solid #efeee8; }
+.bill-total-panel .bill-total { color: var(--yellow); }
+.bill-card-bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 15px; padding-top: 11px; border-top: 1px solid #e8d986; }
 .bill-card-bottom > span { display: flex; gap: 5px; align-items: center; color: #7d7b71; font-size: 9px; }
 .text-button { display: inline-flex; align-items: center; gap: 4px; border: 0; padding: 2px; background: transparent; color: #796306; font-size: 10px; font-weight: 700; }
 .text-button:hover { color: #171714; }
-.bill-participants { margin-top: 12px; padding-top: 12px; border-top: 1px solid #efeee8; }
+.bill-participants { margin-top: 12px; padding: 12px 10px 8px; border: 1px solid #eddf9a; border-radius: 6px; background: #fffdf2; }
 .bill-participants-heading { display: flex; justify-content: space-between; color: #88867c; font-size: 8px; font-weight: 700; letter-spacing: .8px; }
 .bill-participants-heading span { color: var(--ink); letter-spacing: 0; }
 .participant-columns, .bill-participant-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(65px, auto) minmax(75px, auto); align-items: center; gap: 8px; }

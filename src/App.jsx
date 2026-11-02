@@ -41,6 +41,7 @@ function Icon({ name, size = 20 }) {
     people: <><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="10" cy="7" r="4" /><path d="M20 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>,
     plus: <><path d="M12 5v14" /><path d="M5 12h14" /></>,
     spark: <><path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2L12 3Z" /><path d="m19 14 1 2.5 2.5 1-2.5 1L19 21l-1-2.5-2.5-1 2.5-1L19 14Z" /></>,
+    trash: <><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="m19 6-1 14H6L5 6" /><path d="M10 11v5M14 11v5" /></>,
     wallet: <><rect x="3" y="5" width="18" height="15" rx="2" /><path d="M3 9h18" /><path d="M16 15h.01" /><path d="M7 5V3h10v2" /></>,
   }
 
@@ -249,7 +250,7 @@ function HowItWorks() {
   )
 }
 
-function BillCard({ bill, onCopy, onStatusChange, statusBusy }) {
+function BillCard({ bill, onCopy, onStatusChange, statusBusy, onDelete, deleteBusy }) {
   const [participants, setParticipants] = useState([])
   const [participantsVisible, setParticipantsVisible] = useState(false)
   const [participantsLoading, setParticipantsLoading] = useState(false)
@@ -303,13 +304,24 @@ function BillCard({ bill, onCopy, onStatusChange, statusBusy }) {
         <span className={`status-pill${bill.status === 'closed' ? ' status-closed' : ''}`}>
           <span /> {bill.status || 'open'}
         </span>
-        <button
-          className={`status-action${bill.status === 'closed' ? '' : ' status-action-close'}`}
-          onClick={() => onStatusChange(bill)}
-          disabled={statusBusy}
-        >
-          {statusBusy ? 'Updating…' : bill.status === 'closed' ? 'Reopen event' : 'Close event'}
-        </button>
+        <div className="bill-card-actions">
+          <button
+            className={`status-action${bill.status === 'closed' ? '' : ' status-action-close'}`}
+            onClick={() => onStatusChange(bill)}
+            disabled={statusBusy || deleteBusy}
+          >
+            {statusBusy ? 'Updating…' : bill.status === 'closed' ? 'Reopen' : 'Close'}
+          </button>
+          <button
+            className="delete-action"
+            onClick={() => onDelete(bill)}
+            disabled={deleteBusy || statusBusy}
+            aria-label={`Delete ${bill.title}`}
+            title="Delete event"
+          >
+            {deleteBusy ? 'Deleting…' : <><Icon name="trash" size={14} /><span>Delete</span></>}
+          </button>
+        </div>
       </div>
       <h3>{bill.title}</h3>
       <div className="bill-total-panel">
@@ -371,6 +383,7 @@ function Dashboard() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [notice, setNotice] = useState('')
   const [statusUpdatingId, setStatusUpdatingId] = useState('')
+  const [deletingId, setDeletingId] = useState('')
 
   const refreshBills = useCallback(async () => {
     try {
@@ -437,6 +450,22 @@ function Dashboard() {
       setNotice('Couldn’t update this event. Please try again.')
     } finally {
       setStatusUpdatingId('')
+    }
+  }
+
+  async function deleteBill(bill) {
+    const confirmed = window.confirm(`Delete "${bill.title}" and its event record? This can’t be undone.`)
+    if (!confirmed) return
+
+    setDeletingId(bill.id)
+    try {
+      await request(`/bills/${encodeURIComponent(bill.id)}`, { method: 'DELETE' })
+      setBills((current) => current.filter((item) => item.id !== bill.id))
+      setNotice(`“${bill.title}” was deleted.`)
+    } catch {
+      setNotice('Couldn’t delete this event. Please try again.')
+    } finally {
+      setDeletingId('')
     }
   }
 
@@ -513,7 +542,7 @@ function Dashboard() {
             ) : bills.length ? (
               <div className="bills-grid">
                 {bills.map((bill) => (
-                  <BillCard key={bill.id} bill={bill} onStatusChange={changeBillStatus} statusBusy={statusUpdatingId === bill.id} onCopy={(item) => {
+                  <BillCard key={bill.id} bill={bill} onStatusChange={changeBillStatus} statusBusy={statusUpdatingId === bill.id} onDelete={deleteBill} deleteBusy={deletingId === bill.id} onCopy={(item) => {
                     if (!item.public_token) {
                       setNotice('This split has no public token in the bill list, so a joining link cannot be made yet.')
                     } else {
