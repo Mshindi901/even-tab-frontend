@@ -9,13 +9,13 @@ npm install
 npm run dev
 ```
 
-The production API base URL defaults to `https://even-tab-backend.onrender.com/api`. During development, `/api` requests are proxied to `https://even-tab-backend.onrender.com` to avoid cross-origin browser requests. Set `VITE_API_PROXY_TARGET` in a frontend `.env` file to point the proxy at another backend origin:
+The app calls `/api` on its own origin. In development, Vite proxies `/api` to `https://even-tab-backend.onrender.com`; on Vercel, `vercel.json` rewrites `/api` to the backend. This avoids browser cross-origin requests. Set `VITE_API_PROXY_TARGET` in a frontend `.env` file to change the development proxy target:
 
 ```env
 VITE_API_PROXY_TARGET=http://localhost:4000
 ```
 
-To override the API base URL, set `VITE_API_URL` to the full backend URL including `/api`. Production deployments that call the backend directly require the backend's CORS configuration to allow the frontend's origin.
+If you set `VITE_API_URL` to a full backend URL, the backend must allow the frontend origin through CORS. The hosted backend currently returns a mismatched `Access-Control-Allow-Origin` value for the Vercel site, so use the same-origin rewrite unless backend CORS is corrected.
 
 ## How it works
 

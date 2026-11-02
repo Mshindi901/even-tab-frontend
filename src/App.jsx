@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, Route, Routes, useParams, useSearchParams } from 'react-router-dom'
 
-const API_URL = (
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.DEV ? '/api' : 'https://even-tab-backend.onrender.com/api')
-).replace(/\/$/, '')
+const API_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '')
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -52,12 +49,12 @@ function Icon({ name, size = 20 }) {
 
 function Brand({ light = false }) {
   return (
-    <Link className={`brand${light ? ' brand-light' : ''}`} to="/" aria-label="Hive home">
+    <Link className={`brand${light ? ' brand-light' : ''}`} to="/" aria-label="Eventab home">
       <span className="brand-mark" aria-hidden="true">
         <span />
         <span />
       </span>
-      <span>hive<span className="brand-period">.</span></span>
+      <span>eventab<span className="brand-period">.</span></span>
     </Link>
   )
 }
@@ -65,7 +62,7 @@ function Brand({ light = false }) {
 function currencyAmount(amount, currency = 'KES') {
   const value = Number(amount)
   if (!Number.isFinite(value)) return `${currency} 0`
-  return new Intl.NumberFormat('en', {
+  return new Intl.NumberFormat('en-KE', {
     style: 'currency',
     currency,
     maximumFractionDigits: 0,
@@ -85,7 +82,7 @@ function Header({ onCreate }) {
     <header className="topbar">
       <Brand />
       <nav className="topnav" aria-label="Main navigation">
-        <a href="#your-hive">Your hive</a>
+        <a href="#your-events">Your events</a>
         <a href="#how-it-works">How it works</a>
       </nav>
       <button className="button button-dark topbar-cta" onClick={onCreate}>
@@ -126,18 +123,18 @@ function CreateDialog({ onClose, onCreated }) {
       let after
       try {
         after = await request('/bills')
-      } catch (listError) {
-        onCreated(null, `Your split was created, but we could not reload it to find its share token. ${listError.message}`)
+      } catch {
+        onCreated(null, 'Your event was created, but its share link is not ready yet. Please refresh and try again.')
         return
       }
       const created = (after.data || []).find((bill) => !existingIds.has(bill.id))
       if (!created) {
-        onCreated(null, 'Your split was created, but the API did not return a share link. The frontend needs the new bill’s public token to create one.')
+        onCreated(null, 'Your event was created, but its share link is not ready yet. Please refresh and try again.')
         return
       }
       onCreated(created)
-    } catch (requestError) {
-      setError(requestError.message || 'We could not create that split. Please try again.')
+    } catch {
+      setError('We couldn’t create your event. Please try again in a moment.')
     } finally {
       setBusy(false)
     }
@@ -151,13 +148,13 @@ function CreateDialog({ onClose, onCreated }) {
         <button className="icon-button dialog-close" onClick={onClose} aria-label="Close dialog" disabled={busy}>
           <Icon name="close" />
         </button>
-        <div className="eyebrow"><span className="eyebrow-dot" /> START A LITTLE HIVE</div>
+        <div className="eyebrow"><span className="eyebrow-dot" /> START A SHARED EVENT</div>
         <h2 id="create-title">What are we<br />splitting?</h2>
         <p className="dialog-intro">Name the plan and pop in the total. Your people can add what they’ve paid once they join.</p>
         <form onSubmit={submit} className="create-form">
           <label>
             <span>Give it a name</span>
-            <input autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Beach house weekend" maxLength={100} />
+            <input autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Nyama choma with the crew" maxLength={100} />
           </label>
           <label>
             <span>How much is the total?</span>
@@ -184,19 +181,19 @@ function CreateDialog({ onClose, onCreated }) {
 
 function HowItWorks() {
   const steps = [
-    { number: '01', title: 'Start the hive', text: 'Name your plan and add the total. Dinner, a trip, that group gift — all good.' },
-    { number: '02', title: 'Send the buzz', text: 'Copy your one-of-a-kind link and drop it in the group chat. Everyone’s invited.' },
-    { number: '03', title: 'Keep it sweet', text: 'Friends add their name and what they’ve covered. The whole crew stays in the loop.' },
+    { number: '01', title: 'Create your event', text: 'Name the plan and set the total in KES. Chama contribution, nyama choma, or a trip upcountry — it all starts here.' },
+    { number: '02', title: 'Share the link', text: 'Copy your event link and send it to the WhatsApp group. Your people can join from their phones.' },
+    { number: '03', title: 'Track the split', text: 'Everyone adds their name and what they have paid. See the crew’s contributions together.' },
   ]
 
   return (
     <section className="how-section" id="how-it-works">
       <div className="section-heading">
         <div>
-          <div className="eyebrow"><span className="eyebrow-dot" /> EASY AS ONE, TWO, BUZZ</div>
-          <h2>Good plans deserve<br /><span>easy maths.</span></h2>
+          <div className="eyebrow"><span className="eyebrow-dot" /> MADE FOR KENYAN PLANS</div>
+          <h2>How Eventab<br /><span>works.</span></h2>
         </div>
-        <p>Less “who owes what?”<br />More “when are we going?”</p>
+        <p>Keep the money talk clear.<br />Keep the good times coming.</p>
       </div>
       <div className="steps-grid">
         {steps.map((step) => (
@@ -251,7 +248,7 @@ function Dashboard() {
         setLoadError('')
         setBills([])
       } else {
-        setLoadError(error.message || 'Could not load your splits.')
+        setLoadError('We couldn’t load your events just now.')
       }
     } finally {
       setLoading(false)
@@ -267,7 +264,7 @@ function Dashboard() {
     }).catch((error) => {
       if (!active) return
       if (error.status === 404) setBills([])
-      else setLoadError(error.message || 'Could not load your splits.')
+      else setLoadError('We couldn’t load your events just now.')
     }).finally(() => {
       if (active) setLoading(false)
     })
@@ -308,9 +305,9 @@ function Dashboard() {
         <main>
           <section className="hero">
             <div className="hero-copy">
-              <div className="hero-kicker"><span className="hero-kicker-dot" /> THE GROUP PLANS APP</div>
+              <div className="hero-kicker"><span className="hero-kicker-dot" /> MADE FOR KENYA, MADE FOR YOUR CREW</div>
               <h1>Make plans.<br />Split <span>the buzz.</span></h1>
-              <p>Big plans are better together. Keep the costs clear, the crew happy, and the good times rolling.</p>
+              <p>From nyama choma to coast trips, big plans are better together. Keep the costs clear and the crew in the loop.</p>
               <button className="button button-yellow hero-button" onClick={() => setDialogOpen(true)}>
                 Start a split <Icon name="arrow" size={18} />
               </button>
@@ -333,29 +330,31 @@ function Dashboard() {
             </div>
           </section>
 
-          <section className="hive-section" id="your-hive">
-            <div className="hive-heading">
+          <HowItWorks />
+
+          <section className="plans-section" id="your-events">
+            <div className="plans-heading">
               <div>
-                <div className="eyebrow"><span className="eyebrow-dot" /> THE GROUP CHAT, BUT USEFUL</div>
-                <h2>Your hive<span className="yellow-period">.</span></h2>
+                <div className="eyebrow"><span className="eyebrow-dot" /> YOUR GROUP PLANS, IN ONE PLACE</div>
+                <h2>Your events<span className="yellow-period">.</span></h2>
               </div>
               <button className="button button-outline" onClick={() => setDialogOpen(true)}><Icon name="plus" size={18} /> New split</button>
             </div>
             <div className="stats-row">
-              <div className="stat-item"><span>PLANS IN THE HIVE</span><strong>{bills.length.toString().padStart(2, '0')}</strong></div>
+              <div className="stat-item"><span>EVENTS YOU’VE STARTED</span><strong>{bills.length.toString().padStart(2, '0')}</strong></div>
               <div className="stat-item"><span>OPEN RIGHT NOW</span><strong>{openCount.toString().padStart(2, '0')}</strong></div>
               <div className="stat-item"><span>GOOD TIMES PLANNED</span><strong>{currencyAmount(totalPlanned, bills[0]?.currency || 'KES')}</strong></div>
               <div className="stat-doodle" aria-hidden="true">✳</div>
             </div>
             {notice && <div className="notice" role="status"><span>{notice}</span><button className="notice-close" onClick={() => setNotice('')} aria-label="Dismiss message"><Icon name="close" size={16} /></button></div>}
-            <div className="list-heading"><h3>Currently buzzing</h3><span>{bills.length} {bills.length === 1 ? 'split' : 'splits'}</span></div>
+            <div className="list-heading"><h3>Your recent events</h3><span>{bills.length} {bills.length === 1 ? 'event' : 'events'}</span></div>
             {loading ? (
-              <div className="loading-state"><span className="loader" /> Gathering the hive…</div>
+              <div className="loading-state"><span className="loader" /> Loading your events…</div>
             ) : loadError ? (
               <div className="empty-state error-state">
                 <div className="empty-icon"><Icon name="spark" size={24} /></div>
-                <h3>We can’t reach the hive.</h3>
-                <p>{loadError} Check that the backend is running and `VITE_API_URL` points to its `/api` endpoint.</p>
+                <h3>Eventab is having a moment.</h3>
+                <p>Please check your connection and try again in a moment.</p>
                 <button className="button button-dark" onClick={() => { setLoading(true); refreshBills() }}>Try again</button>
               </div>
             ) : bills.length ? (
@@ -381,9 +380,8 @@ function Dashboard() {
             {copied && <div className="toast" role="status"><Icon name="check" size={18} /> Link copied — let the group chat know.</div>}
           </section>
 
-          <HowItWorks />
         </main>
-        <footer className="footer"><Brand /><p>Good plans. Good people. Nice and simple.</p><span>© {new Date().getFullYear()} Hive</span></footer>
+        <footer className="footer"><Brand /><p>Good plans. Good people. Nice and simple.</p><span>© {new Date().getFullYear()} Eventab</span></footer>
       </div>
       {dialogOpen && <CreateDialog onClose={() => setDialogOpen(false)} onCreated={handleCreated} />}
     </>
@@ -415,7 +413,7 @@ function JoinPage() {
         setLoadError('')
         setParticipants([])
       } else {
-        setLoadError(error.message || 'Could not load the crew.')
+        setLoadError('We couldn’t load the guest list just now.')
       }
     } finally {
       setLoading(false)
@@ -431,7 +429,7 @@ function JoinPage() {
     }).catch((error) => {
       if (!active) return
       if (error.status === 404) setParticipants([])
-      else setLoadError(error.message || 'Could not load the crew.')
+      else setLoadError('We couldn’t load the guest list just now.')
     }).finally(() => {
       if (active) setLoading(false)
     })
@@ -454,10 +452,10 @@ function JoinPage() {
       })
       setName('')
       setPaid('')
-      setMessage('You’re in! The hive is officially buzzing.')
+      setMessage('You’re in! Your event is one person stronger.')
       await refreshParticipants()
-    } catch (error) {
-      setMessage(error.message || 'Could not join this split. Please try again.')
+    } catch {
+      setMessage('We couldn’t add you to this event. Please try again in a moment.')
     } finally {
       setBusy(false)
     }
@@ -479,7 +477,7 @@ function JoinPage() {
           <div className="join-illustration" aria-hidden="true"><div className="join-flower">✳</div><div className="join-smile">☺</div><div className="join-bee">●<span>)))</span></div><div className="join-doodle">GOOD<br />TIMES</div></div>
         </section>
         <section className="join-form-card">
-          <div className="eyebrow"><span className="eyebrow-dot" /> JOIN THE HIVE</div>
+          <div className="eyebrow"><span className="eyebrow-dot" /> JOIN THE EVENT</div>
           <h2>Save your seat.</h2>
           <p className="join-card-copy">Let the crew know who’s in and what you’ve put toward the plan so far.</p>
           <form onSubmit={join} className="create-form">
@@ -504,7 +502,7 @@ function JoinPage() {
 }
 
 function NotFound() {
-  return <main className="not-found"><Brand /><div className="eyebrow"><span className="eyebrow-dot" /> WRONG TURN</div><h1>This link wandered<br />off for a <span>snack.</span></h1><p>Let’s get you back to the hive.</p><Link className="button button-yellow" to="/">Back to Hive <Icon name="arrow" size={18} /></Link></main>
+  return <main className="not-found"><Brand /><div className="eyebrow"><span className="eyebrow-dot" /> WRONG TURN</div><h1>This link wandered<br />off for a <span>snack.</span></h1><p>Let’s get you back to Eventab.</p><Link className="button button-yellow" to="/">Back to Eventab <Icon name="arrow" size={18} /></Link></main>
 }
 
 function App() {
