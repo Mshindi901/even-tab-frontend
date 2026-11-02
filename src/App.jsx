@@ -239,24 +239,95 @@ function HowItWorks() {
   )
 }
 
-function BillCard({ bill, onCopy }) {
+function BillCard({ bill, onCopy, onStatusChange, statusBusy }) {
+  const [participants, setParticipants] = useState([])
+  const [participantsVisible, setParticipantsVisible] = useState(false)
+  const [participantsLoading, setParticipantsLoading] = useState(false)
+  const [participantsError, setParticipantsError] = useState('')
+
+  async function loadParticipants() {
+    if (!bill.public_token) {
+      setParticipantsError('Participant details are unavailable for this event.')
+      return
+    }
+
+    setParticipantsLoading(true)
+    setParticipantsError('')
+    try {
+      const result = await request(`/participants/${encodeURIComponent(bill.public_token)}`)
+      setParticipants(result.data || [])
+    } catch (error) {
+      if (error.status === 404) {
+        setParticipants([])
+      } else {
+        setParticipantsError('Couldn’t load participants. Please try again.')
+      }
+    } finally {
+      setParticipantsLoading(false)
+    }
+  }
+
+  function toggleParticipants() {
+    if (participantsVisible) {
+      setParticipantsVisible(false)
+      return
+    }
+
+    setParticipantsVisible(true)
+    if (!participants.length && !participantsLoading) loadParticipants()
+  }
+
   return (
     <article className="bill-card">
       <div className="bill-card-top">
         <span className={`status-pill${bill.status === 'closed' ? ' status-closed' : ''}`}>
           <span /> {bill.status || 'open'}
         </span>
-        <button className="icon-button card-menu" aria-label={`Copy link for ${bill.title}`} onClick={() => onCopy(bill)}>
-          <Icon name="copy" size={18} />
+        <button
+          className={`status-action${bill.status === 'closed' ? '' : ' status-action-close'}`}
+          onClick={() => onStatusChange(bill)}
+          disabled={statusBusy}
+        >
+          {statusBusy ? 'Updating…' : bill.status === 'closed' ? 'Reopen event' : 'Close event'}
         </button>
       </div>
       <h3>{bill.title}</h3>
       <p className="bill-total-label">THE WHOLE THING</p>
       <div className="bill-total">{currencyAmount(bill.bill_total, bill.currency)}</div>
       <div className="bill-card-bottom">
-        <span><Icon name="people" size={16} /> Share with your crew</span>
-        <button className="text-button" onClick={() => onCopy(bill)}>Copy link <Icon name="arrow" size={15} /></button>
+        <button className="text-button" onClick={toggleParticipants} aria-expanded={participantsVisible}>
+          <Icon name="people" size={16} />
+          {participantsVisible ? 'Hide participants' : 'View participants'}
+        </button>
+        {bill.status !== 'closed' && (
+          <button className="text-button" onClick={() => onCopy(bill)}>Copy link <Icon name="arrow" size={15} /></button>
+        )}
       </div>
+      {participantsVisible && (
+        <div className="bill-participants">
+          <div className="bill-participants-heading">PARTICIPANTS <span>{participants.length}</span></div>
+          {participantsLoading ? (
+            <p className="bill-participants-message">Loading participants…</p>
+          ) : participantsError ? (
+            <div className="bill-participants-message">
+              <span>{participantsError}</span>
+              <button className="inline-button" onClick={loadParticipants}>Try again</button>
+            </div>
+          ) : participants.length ? (
+            <ul className="bill-participants-list">
+              {participants.map((participant) => (
+                <li key={participant.id}>
+                  <span className="person-avatar">{participant.name.slice(0, 1).toUpperCase()}</span>
+                  <span className="bill-participant-name">{participant.name}</span>
+                  <strong>{currencyAmount(participant.amount_paid, bill.currency)}</strong>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="bill-participants-message">No participants have joined yet.</p>
+          )}
+        </div>
+      )}
     </article>
   )
 }
@@ -268,6 +339,7 @@ function Dashboard() {
   const [copied, setCopied] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [notice, setNotice] = useState('')
+  const [statusUpdatingId, setStatusUpdatingId] = useState('')
 
   const refreshBills = useCallback(async () => {
     try {
@@ -315,6 +387,25 @@ function Dashboard() {
       window.setTimeout(() => setCopied(''), 2400)
     } catch {
       setNotice('Could not access your clipboard. Open the split to copy its link from your browser address bar.')
+    }
+  }
+
+  async function changeBillStatus(bill) {
+    const status = bill.status === 'closed' ? 'open' : 'closed'
+    setStatusUpdatingId(bill.id)
+    try {
+      await request(`/bills/${encodeURIComponent(bill.id)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status }),
+      })
+      setBills((current) => current.map((item) => item.id === bill.id ? { ...item, status } : item))
+      setNotice(status === 'closed'
+        ? 'Event closed. Existing invite links may still accept participants.'
+        : 'Event reopened. You can share its invite link again.')
+    } catch {
+      setNotice('Couldn’t update this event. Please try again.')
+    } finally {
+      setStatusUpdatingId('')
     }
   }
 
@@ -391,7 +482,7 @@ function Dashboard() {
             ) : bills.length ? (
               <div className="bills-grid">
                 {bills.map((bill) => (
-                  <BillCard key={bill.id} bill={bill} onCopy={(item) => {
+                  <BillCard key={bill.id} bill={bill} onStatusChange={changeBillStatus} statusBusy={statusUpdatingId === bill.id} onCopy={(item) => {
                     if (!item.public_token) {
                       setNotice('This split has no public token in the bill list, so a joining link cannot be made yet.')
                     } else {
@@ -435,7 +526,6 @@ function JoinPage() {
 
   const refreshParticipants = useCallback(async () => {
     try {
-      //doing this to see if I can get my new code in the repo
       const result = await request(`/participants/${encodeURIComponent(token)}`)
       setLoadError('')
       setParticipants(result.data || [])
