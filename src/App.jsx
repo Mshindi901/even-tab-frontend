@@ -1,18 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, Route, Routes, useParams, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 const API_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '')
 
 async function request(path, options = {}) {
+  const token = sessionStorage.getItem('token')
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
     headers: {
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
   })
   const result = await response.json().catch(() => ({}))
   if (!response.ok) {
+    if (response.status === 401 && token) {
+      sessionStorage.removeItem('token')
+      window.dispatchEvent(new Event('eventab:unauthorized'))
+    }
     const error = new Error(result.message || `Request failed (${response.status})`)
     error.status = response.status
     throw error
@@ -88,7 +94,7 @@ function shareUrl(bill) {
   return url.toString()
 }
 
-function Header({ onCreate }) {
+function Header({ onCreate, onLogout }) {
   return (
     <header className="topbar">
       <Brand />
@@ -96,10 +102,13 @@ function Header({ onCreate }) {
         <a href="#your-events">Your events</a>
         <a href="#how-it-works">How it works</a>
       </nav>
-      <button className="button button-dark topbar-cta" onClick={onCreate}>
-        <Icon name="plus" size={18} />
-        <span>New split</span>
-      </button>
+      <div className="topbar-actions">
+        <button className="button button-outline topbar-logout" onClick={onLogout}>Sign out</button>
+        <button className="button button-dark topbar-cta" onClick={onCreate}>
+          <Icon name="plus" size={18} />
+          <span>New split</span>
+        </button>
+      </div>
     </header>
   )
 }
@@ -130,20 +139,17 @@ function CreateDialog({ onClose, onCreated }) {
         throw requestError
       })
       const existingIds = new Set((before.data || []).map((bill) => bill.id))
-      await request('/bills', {
+      const createdResult = await request('/bills', {
         method: 'POST',
         body: JSON.stringify({ title: title.trim(), currency, bill_total: billTotal }),
       })
-      let after
-      try {
-        after = await request('/bills')
-      } catch {
-        onCreated(null, 'Your event was created, but its share link is not ready yet. Please refresh and try again.')
-        return
-      }
-      const created = (after.data || []).find((bill) => !existingIds.has(bill.id))
+      let created = createdResult.data
       if (!created?.public_token) {
-        onCreated(created || null, 'Your event was created, but we couldn’t prepare its joining link. Please refresh and try again.')
+        const after = await request('/bills')
+        created = (after.data || []).find((bill) => !existingIds.has(bill.id))
+      }
+      if (!created?.public_token) {
+        onCreated(null, 'Your event was created, but we couldn’t prepare its joining link. Please refresh and try again.')
         return
       }
 
@@ -215,7 +221,7 @@ function CreateDialog({ onClose, onCreated }) {
             {busy ? 'Making your split…' : <>Make a split <Icon name="arrow" size={18} /></>}
           </button>
         </form>
-        <p className="dialog-footnote"><Icon name="people" size={16} /> No accounts, no awkward follow-ups.</p>
+        <p className="dialog-footnote"><Icon name="people" size={16} /> Your account keeps your events in one place.</p>
       </section>
     </div>
   )
@@ -375,7 +381,7 @@ function BillCard({ bill, onCopy, onStatusChange, statusBusy, onDelete, deleteBu
   )
 }
 
-function Dashboard() {
+function Dashboard({ onLogout }) {
   const [bills, setBills] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -483,7 +489,7 @@ function Dashboard() {
   return (
     <>
       <div className="page-shell">
-        <Header onCreate={() => setDialogOpen(true)} />
+        <Header onCreate={() => setDialogOpen(true)} onLogout={onLogout} />
         <main>
           <section className="hero">
             <div className="hero-copy">
@@ -718,14 +724,114 @@ function JoinPage() {
   )
 }
 
+function AuthPage({ onAuthenticated }) {
+  const navigate = useNavigate()
+  const [mode, setMode] = useState('sign_in')
+  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const isSignUp = mode === 'sign_up'
+
+  async function submit(event) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      let result = await request(`/auth/${mode}`, {
+        method: 'POST',
+        body: JSON.stringify({ username, email, password }),
+      })
+      if (isSignUp && !result.token) {
+        result = await request('/auth/sign_in', {
+          method: 'POST',
+          body: JSON.stringify({ email, password }),
+        })
+      }
+      if (!result.token) {
+        throw new Error('Authentication succeeded without a session token. Please try again.')
+      }
+      sessionStorage.setItem('token', result.token)
+      onAuthenticated()
+      navigate('/', { replace: true })
+    } catch (requestError) {
+      setError(requestError.message || 'We couldn’t sign you in. Please try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <main className="auth-page">
+      <header className="auth-header"><Brand /></header>
+      <section className="auth-card">
+        <div className="eyebrow"><span className="eyebrow-dot" /> YOUR PLANS, ALL TOGETHER</div>
+        <h1>{isSignUp ? 'Make room for' : 'Good to see'}<br /><span>{isSignUp ? 'good plans.' : 'you again.'}</span></h1>
+        <p className="auth-copy">{isSignUp ? 'Create an account to keep your shared events together.' : 'Sign in to pick up where your plans left off.'}</p>
+        <form className="create-form" onSubmit={submit}>
+          {isSignUp && (
+            <label>
+              <span>Your name</span>
+              <input autoComplete="name" required maxLength={80} value={username} onChange={(event) => setUsername(event.target.value)} />
+            </label>
+          )}
+          <label>
+            <span>Email address</span>
+            <input type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} />
+          </label>
+          <label>
+            <span>Password</span>
+            <input type="password" autoComplete={isSignUp ? 'new-password' : 'current-password'} required minLength={isSignUp ? 8 : undefined} value={password} onChange={(event) => setPassword(event.target.value)} />
+          </label>
+          {isSignUp && <p className="field-hint">Use at least 8 characters.</p>}
+          {error && <p className="form-error" role="alert">{error}</p>}
+          <button className="button button-yellow form-submit" type="submit" disabled={busy}>
+            {busy ? 'One moment…' : isSignUp ? 'Create account' : 'Sign in'} <Icon name="arrow" size={18} />
+          </button>
+        </form>
+        <p className="auth-switch">
+          {isSignUp ? 'Already have an account?' : 'New to Eventab?'}{' '}
+          <button type="button" className="inline-button" onClick={() => {
+            setMode(isSignUp ? 'sign_in' : 'sign_up')
+            setError('')
+          }}>
+            {isSignUp ? 'Sign in' : 'Create an account'}
+          </button>
+        </p>
+        <p className="auth-join-link">Joining an event? Use the invite link you received.</p>
+      </section>
+      <footer className="join-footer"><Brand /><span>Good plans, shared.</span></footer>
+    </main>
+  )
+}
+
 function NotFound() {
   return <main className="not-found"><Brand /><div className="eyebrow"><span className="eyebrow-dot" /> WRONG TURN</div><h1>This link wandered<br />off for a <span>snack.</span></h1><p>Let’s get you back to Eventab.</p><Link className="button button-yellow" to="/">Back to Eventab <Icon name="arrow" size={18} /></Link></main>
 }
 
 function App() {
+  const [authenticated, setAuthenticated] = useState(() => Boolean(sessionStorage.getItem('token')))
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    function handleUnauthorized() {
+      setAuthenticated(false)
+    }
+    window.addEventListener('eventab:unauthorized', handleUnauthorized)
+    return () => window.removeEventListener('eventab:unauthorized', handleUnauthorized)
+  }, [])
+
+  function logout() {
+    sessionStorage.removeItem('token')
+    setAuthenticated(false)
+    navigate('/auth', { replace: true })
+  }
+
   return (
     <Routes>
-      <Route path="/" element={<Dashboard />} />
+      <Route path="/" element={authenticated ? <Dashboard onLogout={logout} /> : <Navigate to="/auth" replace />} />
+      <Route path="/auth" element={authenticated ? <Navigate to="/" replace /> : <AuthPage onAuthenticated={() => setAuthenticated(true)} />} />
       <Route path="/join/:token" element={<JoinPage />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
